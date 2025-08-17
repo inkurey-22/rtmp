@@ -1,0 +1,19 @@
+services:
+  rtmp:
+    build: ./nginx
+    container_name: rtmp-nginx
+    ports:
+      - "1935:1935"   # RTMP
+      - "8080:80"     # HTTP (status / simple page)
+    depends_on:
+      - bot
+
+  bot:
+    build: ./bot
+    container_name: rtmp-bot
+    environment:
+      - DISCORD_TOKEN
+      - PUBLIC_HOST=localhost
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
