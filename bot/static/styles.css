@@ -1,0 +1,280 @@
+/* Import Catppuccin palette variables */
+@import url('https://cdn.jsdelivr.net/npm/@catppuccin/palette/css/catppuccin.css');
+
+/*
+  KDE Breeze look & feel using Catppuccin palette
+  ------------------------------------------------
+  Roles (Breeze-ish) mapped to Catppuccin Latte by default:
+    - Window bg:         --bg
+    - Surfaces/frames:   --panel
+    - Text/labels:       --text
+    - Subtle text:       --muted
+    - Border/frames:     --border
+    - Accent (Breeze):   --accent (Catppuccin Blue)
+    - Danger/critical:   --danger
+
+  Optional flavors:
+    Add data-flavor="mocha" to <html> or <body> to switch to Catppuccin Mocha
+    while keeping the same Breeze roles.
+*/
+
+:root {
+  /* Breeze roles (Latte) */
+  --bg: var(--ctp-latte-base);
+  --panel: var(--ctp-latte-surface0);
+  --text: var(--ctp-latte-text);
+  --muted: var(--ctp-latte-subtext0);
+  --border: var(--ctp-latte-surface1);
+
+  /* Accent: Breeze-like blue from Catppuccin */
+  --accent: var(--ctp-latte-blue);
+  --accent-rgb: var(--ctp-latte-blue-rgb);
+
+  /* Aliases for existing code */
+  --primary: var(--accent);
+  --primary-600: var(--ctp-latte-sapphire);
+  --danger: var(--ctp-latte-red);
+
+  /* Interaction tokens */
+  --hover-overlay: rgba(var(--ctp-latte-text-rgb) / 0.04);
+  --active-overlay: rgba(var(--ctp-latte-text-rgb) / 0.08);
+  --focus-ring: rgba(var(--accent-rgb) / 0.35);
+
+  /* Radii, spacing, motion */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --elev-1: 0 1px 2px rgba(var(--ctp-latte-text-rgb) / 0.06);
+  --elev-2: 0 2px 6px rgba(var(--ctp-latte-text-rgb) / 0.08);
+  --duration: 120ms;
+  --easing: cubic-bezier(.2, .0, .2, 1);
+}
+
+/* Catppuccin Mocha flavor (dark) — optional */
+:root[data-flavor="mocha"] {
+  --bg: var(--ctp-mocha-base);
+  --panel: var(--ctp-mocha-surface0);
+  --text: var(--ctp-mocha-text);
+  --muted: var(--ctp-mocha-subtext0);
+  --border: var(--ctp-mocha-surface1);
+  --accent: var(--ctp-mocha-blue);
+  --accent-rgb: var(--ctp-mocha-blue-rgb);
+  --primary: var(--accent);
+  --primary-600: var(--ctp-mocha-sapphire);
+  --danger: var(--ctp-mocha-red);
+  --hover-overlay: rgba(var(--ctp-mocha-text-rgb) / 0.06);
+  --active-overlay: rgba(var(--ctp-mocha-text-rgb) / 0.12);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, .35);
+  --elev-2: 0 6px 18px rgba(0, 0, 0, .28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.container {
+  max-width: 840px;
+  margin: 24px auto;
+  padding: 0 var(--space-4);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--elev-1);
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+label {
+  display: block;
+  margin-bottom: var(--space-3);
+}
+
+label span {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: var(--space-2);
+}
+
+input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color var(--duration) var(--easing), box-shadow var(--duration) var(--easing), background-color var(--duration) var(--easing);
+}
+
+input:hover {
+  background: color-mix(in oklch, var(--bg), white 3%);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  background: var(--bg);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-2);
+}
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color var(--duration) var(--easing), box-shadow var(--duration) var(--easing), border-color var(--duration) var(--easing), color var(--duration) var(--easing);
+}
+
+.btn:hover {
+  background: var(--hover-overlay);
+}
+
+.btn:active {
+  background: var(--active-overlay);
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--accent);
+}
+
+.btn.primary {
+  background: var(--primary);
+  border-color: color-mix(in oklch, var(--primary), black 12%);
+  color: var(--bg);
+}
+
+.btn.primary:hover {
+  background: var(--primary-600);
+}
+
+.btn.primary:active {
+  filter: saturate(1.05) brightness(.98);
+}
+
+.btn.danger {
+  background: var(--danger);
+  border-color: color-mix(in oklch, var(--danger), black 12%);
+  color: var(--bg);
+}
+
+.error {
+  color: var(--danger);
+  margin-top: var(--space-2);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: var(--space-2);
+}
+
+#list {
+  margin-top: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+@media (max-width: 600px) {
+  .item {
+    grid-template-columns: 1fr;
+  }
+}
+
+.item .name {
+  font-weight: 600;
+}
+
+.item .key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color: var(--muted);
+}
+
+/* Subtle separators within cards */
+.card+.card {
+  margin-top: var(--space-3);
+}
+
+/* Small utility for vertical rhythm */
+.mt-2 {
+  margin-top: var(--space-2);
+}
+
+.mt-3 {
+  margin-top: var(--space-3);
+}
+
+.mt-4 {
+  margin-top: var(--space-4);
+}

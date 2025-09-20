@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">RTMP Admin</div>
+    <div class="spacer"></div>
+    <button id="logout" class="btn">Logout</button>
+  </header>
+  <main class="container">
+    <section class="card">
+      <h2>Stream Keys</h2>
+      <form id="create-form" class="row">
+        <input name="name" type="text" placeholder="Name (required)" required />
+        <input name="key" type="text" placeholder="Stream Key (blank to auto-generate)" />
+        <button type="submit" class="btn primary">Save</button>
+      </form>
+      <div id="create-result" class="hint" style="display:none"></div>
+      <div id="list"></div>
+    </section>
+    <section class="card" style="margin-top: 20px;">
+      <h2>Active Feeds</h2>
+      <div id="feeds"></div>
+      <div id="feeds-hint" class="hint">Auto-refreshes every 5s</div>
+    </section>
+  </main>
+  <script src="/static/admin.js"></script>
+</body>
+
+</html>

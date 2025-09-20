@@ -1,150 +1,252 @@
 import os
-import hmac
-import hashlib
 import json
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import PlainTextResponse
-from httpx import AsyncClient
-from dotenv import load_dotenv
-import discord
-from discord.ext import commands
+import dotenv
+import secrets
+import urllib.request
+import xml.etree.ElementTree as ET
+from typing import Dict, List
 
-# app_commands may not exist if an older/alternative discord package is installed; handle gracefully
-app_commands = getattr(discord, 'app_commands', None)
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.responses import PlainTextResponse, FileResponse, RedirectResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.staticfiles import StaticFiles
 
-load_dotenv()
+dotenv.load_dotenv()
 
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-PUBLIC_HOST = os.getenv('PUBLIC_HOST', 'localhost')
+ADMIN_USER = os.getenv('ADMIN_USER')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
+PUBLIC_HOST = os.getenv('PUBLIC_HOST')
+SESSION_SECRET = os.getenv('SESSION_SECRET')
 
-# --- Simple auth store ---
-# For demo, store stream keys in a json file under data/keys.json
+if not ADMIN_PASSWORD or not SESSION_SECRET or not ADMIN_USER or not PUBLIC_HOST:
+    raise RuntimeError("ADMIN_USER, ADMIN_PASSWORD, SESSION_SECRET, and PUBLIC_HOST must be set in environment")
+    exit(1)
+
+# Simple key store on disk
 KEYS_PATH = 'data/keys.json'
 DATA_DIR = os.path.dirname(KEYS_PATH) or 'data'
 try:
     os.makedirs(DATA_DIR, exist_ok=True)
     if not os.path.exists(KEYS_PATH):
-        # create file with default empty mapping
         with open(KEYS_PATH, 'w') as f:
             json.dump({}, f)
 except PermissionError as exc:
-    # Provide an actionable error that helps the operator fix host permissions
     raise RuntimeError(
         f"Permission denied creating '{KEYS_PATH}' or its parent directory. "
         "Fix permissions on the host, for example: `sudo chown -R $(id -u):$(id -g) bot/data` "
         "or run the container as a user that can write to that path."
     ) from exc
 
+
 app = FastAPI()
 
-# Discord bot + slash command
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Static files (HTML/CSS/JS)
+app.mount('/static', StaticFiles(directory='static'), name='static')
 
-# Register a command to send POV: try slash command, fall back to prefix command if necessary
+# Sessions for simple auth
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
-
-@bot.event
-async def on_ready():
-    print(f"Bot ready. Logged in as {bot.user}")
-
-    # Sync app (slash) commands once and report which commands are present.
-    # Guard with a flag so we don't print this repeatedly on reconnects.
-    if app_commands is not None and not getattr(bot, '_commands_synced', False):
-        try:
-            # sync the command tree with Discord (this may create/update commands)
-            await bot.tree.sync()
-            # collect registered command names from the local tree
-            command_names = [c.name for c in bot.tree.walk_commands()]
-            if command_names:
-                print(f"Synced {len(command_names)} app command(s): {', '.join(command_names)}")
-            else:
-                print("No app commands found to sync.")
-        except Exception as e:
-            print(f"Failed to sync app commands: {e}")
-        finally:
-            bot._commands_synced = True
+# Optional: allow same-origin JS; adjust if you serve UI elsewhere
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 
-class Pov(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    # If app_commands is available, register as a slash command on the app command tree
-    if app_commands is not None:
-        @app_commands.command(name='send_pov', description='Register a POV stream key for a name')
-        @app_commands.describe(name='Display name', key='RTMP stream key')
-        async def send_pov(self, interaction: discord.Interaction, name: str, key: str):
-            with open(KEYS_PATH, 'r') as f:
-                data = json.load(f)
-            data[name] = key
-            with open(KEYS_PATH, 'w') as f:
-                json.dump(data, f)
-            await interaction.response.send_message(f"Saved POV '{name}' -> key", ephemeral=True)
-    else:
-        # Fallback: use a prefix command (!send_pov name key)
-        @commands.command(name='send_pov')
-        async def send_pov(self, ctx: commands.Context, name: str, key: str):
-            with open(KEYS_PATH, 'r') as f:
-                data = json.load(f)
-            data[name] = key
-            with open(KEYS_PATH, 'w') as f:
-                json.dump(data, f)
-            await ctx.send(f"Saved POV '{name}' -> key")
+def require_auth(request: Request):
+    if not request.session.get('user'):
+        raise HTTPException(status_code=401, detail='Unauthorized')
+    return True
 
 
-bot.add_cog(Pov(bot))
+@app.get('/')
+async def root(request: Request):
+    if request.session.get('user'):
+        return RedirectResponse('/admin', status_code=302)
+    return RedirectResponse('/login', status_code=302)
 
-# If app_commands is available, also register a top-level slash command (server/guild/global)
-if app_commands is not None:
-    @bot.tree.command(name='send_pov')
-    async def slash_send_pov(interaction: discord.Interaction, name: str, key: str):
-        with open(KEYS_PATH, 'r') as f:
-            data = json.load(f)
-        data[name] = key
-        with open(KEYS_PATH, 'w') as f:
-            json.dump(data, f)
 
-        await interaction.response.send_message(f"Saved POV '{name}' -> key", ephemeral=True)
-else:
-    # top-level text command already covered by the Cog fallback
-    pass
+@app.get('/login')
+async def login_page():
+    return FileResponse('static/login.html')
 
-# Run bot in background when FastAPI starts
-@app.on_event('startup')
-async def startup_event():
-    # start discord bot in background
-    async def _run_bot():
-        await bot.start(DISCORD_TOKEN)
 
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.create_task(_run_bot())
+@app.post('/api/login')
+async def api_login(payload: Dict[str, str], request: Request):
+    username = (payload or {}).get('username', '')
+    password = (payload or {}).get('password', '')
+    if username == ADMIN_USER and password == ADMIN_PASSWORD:
+        request.session['user'] = username
+        return {'ok': True}
+    raise HTTPException(status_code=401, detail='Invalid credentials')
 
-# RTMP on_publish hook: called by nginx when a publisher starts.
-# We'll check the stream key and allow/deny.
+
+@app.post('/api/logout')
+async def api_logout(request: Request):
+    request.session.clear()
+    return {'ok': True}
+
+
+@app.get('/api/me')
+async def api_me(request: Request):
+    user = request.session.get('user')
+    return {'authenticated': bool(user), 'user': user}
+
+
+@app.get('/admin')
+async def admin_page(request: Request):
+    if not request.session.get('user'):
+        return RedirectResponse('/login', status_code=302)
+    return FileResponse('static/admin.html')
+
+
+def _read_keys() -> Dict[str, str]:
+    with open(KEYS_PATH, 'r') as f:
+        return json.load(f)
+
+
+def _write_keys(data: Dict[str, str]):
+    with open(KEYS_PATH, 'w') as f:
+        json.dump(data, f)
+
+
+@app.get('/api/keys')
+async def list_keys(auth: bool = Depends(require_auth)):
+    return _read_keys()
+
+
+@app.post('/api/keys')
+async def upsert_key(payload: Dict[str, str], auth: bool = Depends(require_auth)):
+    # Accept a required name and optional key. If key is missing/blank, auto-generate.
+    name = (payload or {}).get('name')
+    key = (payload or {}).get('key')
+    if name:
+        name = str(name).strip()
+    if key is not None:
+        key = str(key).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail='name is required')
+
+    data = _read_keys()
+
+    generated = False
+    if not key:
+        # Generate a URL-safe stream key and ensure uniqueness against existing values
+        existing_values = set(data.values())
+        for _ in range(5):  # a few attempts to avoid rare collision
+            candidate = secrets.token_urlsafe(32)  # ~43 chars base64url
+            if candidate not in existing_values:
+                key = candidate
+                break
+        else:
+            # Extremely unlikely
+            raise HTTPException(status_code=500, detail='failed to generate unique key')
+        generated = True
+
+    data[name] = key
+    _write_keys(data)
+    return {'ok': True, 'name': name, 'key': key, 'generated': generated}
+
+
+@app.delete('/api/keys/{name}')
+async def delete_key(name: str, auth: bool = Depends(require_auth)):
+    data = _read_keys()
+    if name in data:
+        del data[name]
+        _write_keys(data)
+    return {'ok': True}
+
+
+# (Active Streams feature removed)
+
+
+# RTMP hooks (no auth)
 @app.post('/on_publish')
 async def on_publish(request: Request):
     form = await request.form()
-    # nginx posts variables like name, args, etc.
-    stream_key = form.get('name') or form.get('args')
-    app_name = form.get('app')
-    # simple validation: check key exists in our store
-    with open(KEYS_PATH, 'r') as f:
-        data = json.load(f)
+    stream_key = form.get('name') or form.get('args') or ''
+    data = _read_keys()
     if stream_key in data.values():
         return PlainTextResponse('OK')
-    # deny if not found
     raise HTTPException(status_code=403, detail='Forbidden')
+
 
 @app.post('/on_play')
 async def on_play(request: Request):
     return PlainTextResponse('OK')
 
-# Minimal health route
-@app.get('/')
-async def index():
+
+def _parse_rtmp_stat(xml_text: str) -> List[Dict]:
+    """Parse nginx-rtmp stat XML into a list of active streams for the 'live' app.
+
+    Returns a list of dicts with keys: stream (id), uptime (sec), clients (int),
+    bytes_in, bytes_out, bw_in, bw_out, label (mapped from keys.json if possible).
+    """
+    try:
+        tree = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    # Build reverse map from stream key -> friendly name
+    keys = _read_keys()  # name -> key
+    key_to_name = {v: k for k, v in keys.items()}
+
+    streams: List[Dict] = []
+    # Find all streams under application name 'live'
+    for app in tree.findall('.//application'):
+        name_el = app.find('name')
+        if name_el is None or name_el.text != 'live':
+            continue
+        live_el = app.find('live')
+        if live_el is None:
+            continue
+        for s in live_el.findall('stream'):
+            sid = (s.findtext('name') or '').strip()
+            if not sid:
+                continue
+            def _int(tag: str) -> int:
+                try:
+                    return int((s.findtext(tag) or '0').strip())
+                except ValueError:
+                    return 0
+            streams.append({
+                'stream': sid,
+                'label': key_to_name.get(sid, sid),
+                'uptime': _int('time'),
+                'clients': _int('nclients') or _int('clients'),
+                'bytes_in': _int('bytes_in'),
+                'bytes_out': _int('bytes_out'),
+                'bw_in': _int('bw_in'),
+                'bw_out': _int('bw_out'),
+            })
+    return streams
+
+
+@app.get('/api/feeds')
+async def api_feeds(auth: bool = Depends(require_auth)):
+    """Return current active streams from nginx-rtmp stat page."""
+    # Inside Docker network the service name is 'rtmp' on port 80
+    url = os.getenv('RTMP_STAT_URL', 'http://rtmp/stat')
+    try:
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            xml_text = resp.read().decode('utf-8', errors='ignore')
+    except Exception as exc:
+        # Hide internal error, just return empty list with a hint
+        return JSONResponse({'feeds': [], 'error': str(exc)}, status_code=200)
+
+    streams = _parse_rtmp_stat(xml_text)
+    return {'feeds': streams}
+
+
+# Health
+@app.get('/health')
+async def health():
     return {'status': 'ok'}
+
 
 if __name__ == '__main__':
     import uvicorn

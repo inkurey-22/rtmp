@@ -1,5 +1,4 @@
 fastapi
 uvicorn[standard]
-httpx
-python-dotenv
-py-cord==2.4.0
+starlette
+itsdangerous

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <main class="container">
+    <h1>RTMP Admin</h1>
+    <form id="login-form" class="card">
+      <label>
+        <span>Username</span>
+        <input name="username" type="text" autocomplete="username" required />
+      </label>
+      <label>
+        <span>Password</span>
+        <input name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit" class="btn primary">Sign in</button>
+      <p id="login-error" class="error" hidden></p>
+    </form>
+  </main>
+  <script src="/static/login.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      fetch('/api/me').then(r=>r.json()).then(me => {
+        if (me.authenticated) window.location.href = '/admin';
+      });
+    });
+  </script>
+  </body>
+  </html>

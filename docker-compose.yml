@@ -11,9 +11,6 @@ services:
   bot:
     build: ./bot
     container_name: rtmp-bot
-    environment:
-      - DISCORD_TOKEN
-      - PUBLIC_HOST=localhost
     ports:
       - "8000:8000"
     restart: unless-stopped
